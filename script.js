@@ -4,24 +4,30 @@ const userInput = document.getElementById('userInput');
 const micBtn = document.getElementById('mic-btn');
 const sidebar = document.getElementById('sidebar');
 const overlay = document.getElementById('overlay');
-const welcomeScreen = document.getElementById('welcome-screen');
 const sidebarVoiceBtn = document.querySelector('.sidebar-voice-btn');
 
 let isRecording = false;
 let currentMode = 'text';
 let chatHistory = JSON.parse(localStorage.getItem('jarvis_memory')) || [];
 
-// --- SIDEBAR BOSHQARUVI ---
 function toggleSidebar() {
     sidebar.classList.toggle('mobile-open');
     overlay.classList.toggle('active');
 }
 
-// --- OVOZLI REJIM ---
+// Ovozni aniqlash
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-recognition.continuous = true;
-recognition.lang = 'uz-UZ';
+const recognition = new SpeechRecognition ? new SpeechRecognition() : null;
+
+if (recognition) {
+    recognition.continuous = true;
+    recognition.lang = 'uz-UZ';
+    recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript;
+        userInput.value = transcript;
+        handleTextInput();
+    };
+}
 
 function toggleVoice() {
     if (isRecording) {
@@ -36,34 +42,23 @@ function toggleVoice() {
         currentMode = 'voice';
         statusText.innerText = "SIZNI ESHITMOQDAMAN...";
         updateUI(true);
-        speak("Voice protocol active, Sir.");
+        speak("Ovozli protokol faollashtirildi, Ser.");
     }
 }
 
 function updateUI(active) {
-    if (active) {
-        micBtn.classList.add('pulse');
-        sidebarVoiceBtn.style.color = "red";
-    } else {
-        micBtn.classList.remove('pulse');
-        sidebarVoiceBtn.style.color = "";
-    }
+    micBtn.classList.toggle('pulse', active);
+    sidebarVoiceBtn.style.color = active ? "#ff4444" : "";
 }
-
-recognition.onresult = (event) => {
-    const transcript = event.results[event.results.length - 1][0].transcript;
-    userInput.value = transcript;
-    handleTextInput();
-};
 
 function speak(text) {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'uz-UZ';
+    utter.lang = 'uz-UZ'; // O'zbek tili
     window.speechSynthesis.speak(utter);
 }
 
-// --- API VA CHAT ---
+// Groq API - O'zbekcha buyruq bilan
 async function getAIResponse(text) {
     const apiKey = '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';
     chatHistory.push({ role: "user", content: text });
@@ -74,27 +69,32 @@ async function getAIResponse(text) {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: "llama-3.3-70b-versatile",
-                messages: [{ role: "system", content: "You are J.A.R.V.I.S. 4.0. Address user as Sir." }, ...chatHistory]
+                messages: [
+                    { role: "system", content: "Siz J.A.R.V.I.S. 4.0 versiyasidasiz. Foydalanuvchiga faqat 'Ser' deb murojaat qiling. Barcha savollarga O'ZBEK tilida javob bering." },
+                    ...chatHistory
+                ]
             })
         });
         const data = await response.json();
         return data.choices[0].message.content;
-    } catch (e) { return "Sir, connection failed."; }
+    } catch (e) { return "Ser, aloqada uzilish yuz berdi."; }
 }
 
 async function handleTextInput() {
     const text = userInput.value.trim();
     if (!text) return;
+
+    if(document.getElementById('welcome-screen')) document.getElementById('welcome-screen').style.display = 'none';
     
-    welcomeScreen.style.display = 'none';
     addMessageToUI("Siz", text);
     userInput.value = "";
     statusText.innerText = "TAHLIL QILINMOQDA...";
 
     const response = await getAIResponse(text);
     addMessageToUI("Jarvis", response);
+    
     chatHistory.push({ role: "assistant", content: response });
-    localStorage.setItem('jarvis_memory', JSON.stringify(chatHistory));
+    localStorage.setItem('jarvis_memory', JSON.stringify(chatHistory.slice(-10))); // Xotirani tejash
 
     if (currentMode === 'voice') speak(response);
     statusText.innerText = "ONLINE";
@@ -104,8 +104,8 @@ function addMessageToUI(sender, text) {
     const msgDiv = document.createElement('div');
     msgDiv.style.cssText = `display: flex; gap: 15px; margin-bottom: 20px; flex-direction: ${sender === "Jarvis" ? "row" : "row-reverse"}`;
     msgDiv.innerHTML = `
-        <div style="width: 35px; height: 35px; border-radius: 50%; background: ${sender === "Jarvis" ? "#10a37f" : "#5436da"}; display: grid; place-items: center; color: white; flex-shrink: 0;">${sender[0]}</div>
-        <div style="background: ${sender === "Jarvis" ? "transparent" : "#f4f4f4"}; padding: 12px 18px; border-radius: 18px; max-width: 80%; border: ${sender === "Jarvis" ? "1px solid #eee" : "none"}">${text}</div>
+        <div style="width: 35px; height: 35px; border-radius: 50%; background: ${sender === "Jarvis" ? "#00d2ff" : "#5436da"}; display: grid; place-items: center; color: black; font-weight: bold;">${sender[0]}</div>
+        <div class="text-content">${text}</div>
     `;
     logText.appendChild(msgDiv);
     logText.scrollTop = logText.scrollHeight;
